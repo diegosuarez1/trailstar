@@ -179,6 +179,14 @@
             margin-top: 8px;
         }
 
+        .trail-stats {
+            font-size: 11px;
+            color: #a0aec0;
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
         .map-container {
             flex: 1;
             position: relative;
@@ -211,6 +219,24 @@
             100% { transform: rotate(360deg); }
         }
 
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .ai-badge {
+            background: #667eea;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+        }
+
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
@@ -230,7 +256,7 @@
 <body>
     <div class="container">
         <div class="search-panel">
-            <div class="logo">🥾 TrailFinder</div>
+            <div class="logo">TrailFinder</div>
             
             <div class="search-box">
                 <input type="text" 
@@ -262,10 +288,10 @@
                     <label class="filter-label">Trail Surface</label>
                     <select class="filter-select" id="surfaceFilter">
                         <option value="">Any Surface</option>
-                        <option value="paved">Paved</option>
                         <option value="dirt">Dirt/Natural</option>
                         <option value="gravel">Gravel</option>
-                        <option value="boardwalk">Boardwalk</option>
+                        <option value="sand">Sand</option>
+                        <option value="rock">Rock</option>
                     </select>
                 </div>
 
@@ -275,10 +301,11 @@
                         <option value="">No Preference</option>
                         <option value="hiking">Hiking Only</option>
                         <option value="biking">Biking Allowed</option>
-                        <option value="horses">Horses Allowed</option>
                     </select>
                 </div>
             </div>
+
+            <div class="error-message" id="errorMessage"></div>
 
             <div class="loading" id="loadingState">
                 <div class="spinner"></div>
@@ -298,78 +325,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     
     <script>
-        const map = L.map('map').setView([37.2431, -80.4139], 10); // Centered on Blacksburg, VA
+        // Initialize map centered on Virginia
+        const map = L.map('map').setView([37.2431, -80.4139], 8);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        const sampleTrails = [
-            {
-                id: 1,
-                name: "Cascades Falls Trail",
-                difficulty: "moderate",
-                length: 4.0,
-                surface: "dirt",
-                vehicles: "hiking",
-                description: "Beautiful waterfall hike with moderate elevation gain. Features stream crossings and scenic overlooks.",
-                coordinates: [37.3551, -80.5951],
-                elevationProfile: [400, 420, 450, 480, 520, 580, 620],
-                aiSummary: "A classic Virginia waterfall hike perfect for intermediate hikers seeking natural beauty and moderate challenge."
-            },
-            {
-                id: 2,
-                name: "Huckleberry Trail",
-                difficulty: "easy",
-                length: 16.2,
-                surface: "paved",
-                vehicles: "biking",
-                description: "Paved rail-trail connecting Blacksburg to Christiansburg. Flat terrain perfect for biking and walking.",
-                coordinates: [37.2431, -80.4139],
-                elevationProfile: [650, 648, 645, 642, 640, 638, 635],
-                aiSummary: "An accessible paved trail ideal for families, cyclists, and anyone wanting a leisurely outdoor experience."
-            },
-            {
-                id: 3,
-                name: "Dragon's Tooth Trail",
-                difficulty: "hard",
-                length: 4.6,
-                surface: "dirt",
-                vehicles: "hiking",
-                description: "Challenging hike to iconic rock formation. Steep climbs and rocky terrain with rewarding summit views.",
-                coordinates: [37.3726, -80.1450],
-                elevationProfile: [1200, 1350, 1500, 1680, 1850, 2100, 2600],
-                aiSummary: "Virginia's most challenging and rewarding day hike, featuring dramatic rock formations and panoramic views."
-            },
-            {
-                id: 4,
-                name: "Heritage Park Trail",
-                difficulty: "easy",
-                length: 2.1,
-                surface: "gravel",
-                vehicles: "hiking",
-                description: "Easy loop trail around Heritage Park with interpretive stations and wildlife viewing opportunities.",
-                coordinates: [37.2267, -80.4078],
-                elevationProfile: [620, 625, 630, 628, 622, 618, 620],
-                aiSummary: "A peaceful nature walk perfect for beginners and families, offering educational opportunities about local wildlife."
-            },
-            {
-                id: 5,
-                name: "New River Trail",
-                difficulty: "easy",
-                length: 12.8,
-                surface: "gravel",
-                vehicles: "biking",
-                description: "Multi-use trail following the New River with historic trestles and beautiful river views.",
-                coordinates: [37.0431, -80.7139],
-                elevationProfile: [540, 538, 535, 532, 530, 528, 525],
-                aiSummary: "A scenic river trail combining natural beauty with historical railroad heritage, suitable for all skill levels."
-            }
-        ];
-
         let trailMarkers = [];
         let selectedTrail = null;
 
+        // DOM elements
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
         const lengthFilter = document.getElementById('lengthFilter');
@@ -379,6 +345,10 @@
         const vehicleFilter = document.getElementById('vehicleFilter');
         const trailResults = document.getElementById('trailResults');
         const loadingState = document.getElementById('loadingState');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Configure API base URL - adjust this based on your setup
+        const API_BASE = window.location.origin.includes('localhost') ? 'http://localhost:5000' : '';
 
         function logEvent(event, data) {
             console.log(JSON.stringify({
@@ -389,12 +359,20 @@
             }));
         }
 
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
         lengthFilter.addEventListener('input', function() {
             lengthDisplay.textContent = `Up to ${this.value} km`;
             logEvent('filter_changed', { filter: 'length', value: this.value });
         });
 
-        function performSearch() {
+        async function performSearch() {
             const query = searchInput.value.trim();
             const filters = {
                 length: parseInt(lengthFilter.value),
@@ -405,22 +383,61 @@
 
             logEvent('search_initiated', { query, filters });
 
+            // Show loading state
             loadingState.style.display = 'block';
             trailResults.style.display = 'none';
+            errorMessage.style.display = 'none';
 
-            setTimeout(() => {
-                const filteredTrails = filterTrails(sampleTrails, filters, query);
-                displayTrails(filteredTrails);
-                showTrailsOnMap(filteredTrails);
+            try {
+                const response = await fetch(`${API_BASE}/api/search`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ query, filters })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status} - ${response.statusText}`);
+                }
+
+                const data = await response.json();
                 
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                displayTrails(data.trails, data.used_ai);
+                showTrailsOnMap(data.trails);
+                
+                logEvent('search_completed', { 
+                    resultsCount: data.trails.length,
+                    trails: data.trails.map(t => t.id),
+                    usedAI: data.used_ai
+                });
+
+            } catch (error) {
+                console.error('Search failed:', error);
+                logEvent('search_error', { error: error.message });
+                showError(`Search failed: ${error.message}`);
+                
+            } finally {
                 loadingState.style.display = 'none';
                 trailResults.style.display = 'block';
+            }
+        }
 
-                logEvent('search_completed', { 
-                    resultsCount: filteredTrails.length,
-                    trails: filteredTrails.map(t => t.id)
-                });
-            }, 1500);
+        async function loadInitialTrails() {
+            try {
+                const response = await fetch(`${API_BASE}/api/trails`);
+                if (response.ok) {
+                    const data = await response.json();
+                    displayTrails(data.trails, false);
+                    showTrailsOnMap(data.trails);
+                }
+            } catch (error) {
+                console.error('Failed to load initial trails:', error);
+            }
         }
 
         searchBtn.addEventListener('click', performSearch);
@@ -430,19 +447,15 @@
             }
         });
 
-        function filterTrails(trails, filters, query) {
-            return trails.filter(trail => {
-                if (filters.length && trail.length > filters.length) return false;
-                if (filters.difficulty && trail.difficulty !== filters.difficulty) return false;
-                if (filters.surface && trail.surface !== filters.surface) return false;
-                if (filters.vehicles && trail.vehicles !== filters.vehicles) return false;
-                return true;
-            }).slice(0, 5); 
-        }
-
-        function displayTrails(trails) {
+        function displayTrails(trails, usedAI = false) {
             const resultsContainer = document.querySelector('.trail-results');
-            resultsContainer.innerHTML = '<div class="results-header">Top 5 Recommended Trails</div>';
+            const headerText = usedAI ? 'AI-Recommended Trails' : 'Top 5 Recommended Trails';
+            resultsContainer.innerHTML = `<div class="results-header">${headerText}${usedAI ? '<span class="ai-badge">AI</span>' : ''}</div>`;
+
+            if (!trails || trails.length === 0) {
+                resultsContainer.innerHTML += '<div style="text-align: center; color: #718096; padding: 20px;">No trails found matching your criteria.</div>';
+                return;
+            }
 
             trails.forEach((trail, index) => {
                 const trailCard = document.createElement('div');
@@ -459,7 +472,13 @@
                         <span>Surface: ${trail.surface}</span>
                         <span>${trail.vehicles}</span>
                     </div>
-                    <div class="trail-description">${trail.aiSummary}</div>
+                    <div class="trail-description">${trail.ai_summary || trail.description}</div>
+                    ${trail.max_slope || trail.stream_crossings ? `
+                    <div class="trail-stats">
+                        ${trail.max_slope ? `<span>Max slope: ${trail.max_slope}%</span>` : ''}
+                        ${trail.stream_crossings ? `<span>${trail.stream_crossings} stream crossings</span>` : ''}
+                    </div>
+                    ` : ''}
                 `;
 
                 trailCard.addEventListener('click', () => selectTrail(trail, trailCard));
@@ -468,15 +487,23 @@
         }
 
         function showTrailsOnMap(trails) {
+            // Clear existing markers
             trailMarkers.forEach(marker => map.removeLayer(marker));
             trailMarkers = [];
+
+            if (!trails || trails.length === 0) return;
 
             trails.forEach((trail, index) => {
                 const marker = L.marker(trail.coordinates)
                     .bindPopup(`
-                        <strong>${trail.name}</strong><br>
-                        ${trail.length} km • ${trail.difficulty}<br>
-                        ${trail.description}
+                        <div style="min-width: 200px;">
+                            <strong>${trail.name}</strong><br>
+                            <span style="color: #666;">${trail.length} km • ${trail.difficulty}</span><br>
+                            <div style="margin-top: 8px; font-size: 13px;">
+                                ${trail.ai_summary || trail.description}
+                            </div>
+                            ${trail.max_slope ? `<div style="margin-top: 5px; font-size: 12px; color: #888;">Max slope: ${trail.max_slope}%</div>` : ''}
+                        </div>
                     `)
                     .addTo(map);
 
@@ -489,6 +516,7 @@
                 });
             });
 
+            // Fit map to show all markers
             if (trailMarkers.length > 0) {
                 const group = new L.featureGroup(trailMarkers);
                 map.fitBounds(group.getBounds().pad(0.1));
@@ -496,18 +524,22 @@
         }
 
         function selectTrail(trail, cardElement) {
+            // Remove selection from all cards
             document.querySelectorAll('.trail-card').forEach(card => {
                 card.classList.remove('selected');
             });
 
+            // Select the clicked card
             if (cardElement) {
                 cardElement.classList.add('selected');
             }
 
             selectedTrail = trail;
 
+            // Center map on selected trail
             map.setView(trail.coordinates, 14);
 
+            // Open popup for selected trail
             trailMarkers.forEach(marker => {
                 if (marker.trailId === trail.id) {
                     marker.openPopup();
@@ -517,13 +549,7 @@
             logEvent('trail_selected', { trailId: trail.id, trailName: trail.name });
         }
 
-        window.addEventListener('load', function() {
-            logEvent('app_loaded', { userAgent: navigator.userAgent });
-            
-            displayTrails(sampleTrails.slice(0, 5));
-            showTrailsOnMap(sampleTrails.slice(0, 5));
-        });
-
+        // Event listeners
         [difficultyFilter, surfaceFilter, vehicleFilter].forEach(filter => {
             filter.addEventListener('change', function() {
                 logEvent('filter_changed', { 
@@ -531,6 +557,12 @@
                     value: this.value 
                 });
             });
+        });
+
+        // Initialize the app when page loads
+        window.addEventListener('load', function() {
+            logEvent('app_loaded', { userAgent: navigator.userAgent });
+            loadInitialTrails();
         });
     </script>
 </body>
