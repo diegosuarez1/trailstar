@@ -1,0 +1,90 @@
+https://github.com/diegosuarez1/trailstar.git
+Best Accessibility
+Best UI/UX
+1st, 2nd, 3rd
+Best realestate hack
+Best financial hack
+
+Todo List:
+UI and/or ML Component: Tapan
+Hike Database and Clustering: Liam
+Trail Similarity from Input: Diego
+Filter under different features to find similar trails in the database
+Similar embedding space possibly 
+
+
+
+Tech Stack:
+Python (For initial feature engineering and clustering)
+Geopandas
+Scikit-learn 
+Javascript (Frontend component)
+Leaflet.JS for Google Maps overlay
+GoogleMaps API for directions 
+
+
+
+Roadmap:
+Create a new database with feature-engineered features below - 
+Algorithm that matches your prompt to a list of trails most similar to it
+Prompt input box 
+
+User Experience:
+User describes a trail they want to travel on
+Algorithm matches your prompt to a list of trails in database
+Recommends N trailheads, which appear as points on the map
+Pulls general data from database
+Trail Difficulty (From clustering)
+Trail Name
+Trail Surface or Type
+Trail Length
+Elevation Profile 
+Average 
+Vehicles Allowed on Trail
+Overlays geometric data from database to show
+The Trail
+Nearby Rivers 
+Nearby Roads
+Notable Elevations or Points
+Contour Map
+Optional:
+Live Tracking on Trail shows location
+Notifies you when you reach difficult sections
+
+What we have:
+Trail Name
+Trail Length
+Trail Type
+Bicycles/other vehicles allowed
+Trail Surface
+What to Feature Engineer
+Elevation Data (DEM)
+
+Select intervals of the trail and sample the elevation. Then make a 1D array elevation profile graph. Get these insights out of it 
+Max Slope
+Average Slope
+Variance of the Slope
+Number of Slopes above specified threshold
+Sudden changes in elevation (Points of inflection)
+Concavity
+Geometry (Comes from GPKG)
+Length of trail (km)
+Curviness of Trail (Use Sinuosity index)
+
+
+Hydro Layers (Rivers, Lakes)
+Minimum distance to a lake or river
+# of Stream crossings (trail intersection with rivers) - find with GPKG
+Proximity to Park or Natural Park
+Proximity to nearest city
+
+
+
+Historical Weather Data/Biome Data 
+Average temperature year-round or per month
+Average weather in area
+Biome or Types of Trees
+Average humidity
+
+Trail name
+Difficulty rating
