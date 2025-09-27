@@ -146,10 +146,38 @@
             background: #f7fafc;
         }
 
+        .trail-card.expanded {
+            border-left-color: #667eea;
+        }
+
+        .trail-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .trail-main-info {
+            flex: 1;
+        }
+
         .trail-name {
             font-weight: bold;
             color: #2d3748;
             margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dropdown-arrow {
+            font-size: 12px;
+            color: #718096;
+            transition: transform 0.3s ease;
+        }
+
+        .dropdown-arrow.expanded {
+            transform: rotate(180deg);
         }
 
         .trail-info {
@@ -185,6 +213,73 @@
             margin-top: 5px;
             display: flex;
             justify-content: space-between;
+        }
+
+        .trail-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            margin-top: 15px;
+        }
+
+        .trail-details.expanded {
+            max-height: 800px;
+            transition: max-height 0.5s ease-in;
+        }
+
+        .details-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .details-title {
+            font-weight: bold;
+            color: #4a5568;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .details-content {
+            font-size: 12px;
+            color: #718096;
+            line-height: 1.4;
+        }
+
+        .elevation-chart {
+            width: 100%;
+            height: 120px;
+            background: white;
+            border-radius: 6px;
+            padding: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .location-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .location-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .location-item:last-child {
+            border-bottom: none;
+        }
+
+        .location-distance {
+            float: right;
+            color: #a0aec0;
+            font-weight: bold;
         }
 
         .map-container {
@@ -372,6 +467,82 @@
             logEvent('filter_changed', { filter: 'length', value: this.value });
         });
 
+        function createElevationChart(canvasId, elevationProfile) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !elevationProfile || elevationProfile.length < 2) return;
+            
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Find min and max elevation
+            const minElevation = Math.min(...elevationProfile);
+            const maxElevation = Math.max(...elevationProfile);
+            const elevationRange = maxElevation - minElevation || 1;
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#e2e8f0';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < 5; i++) {
+                const y = (height * i) / 5;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+            
+            // Draw elevation line
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 2;
+            ctx.fillStyle = 'rgba(102, 126, 234, 0.1)';
+            
+            ctx.beginPath();
+            elevationProfile.forEach((elevation, index) => {
+                const x = (width * index) / (elevationProfile.length - 1);
+                const y = height - ((elevation - minElevation) / elevationRange) * height;
+                
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            
+            // Fill area under curve
+            const lastX = width;
+            const lastY = height - ((elevationProfile[elevationProfile.length - 1] - minElevation) / elevationRange) * height;
+            ctx.lineTo(lastX, height);
+            ctx.lineTo(0, height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        function getNearbyLocations(coordinates, distance) {
+            // Mock data for nearby cities and landmarks
+            const mockCities = [
+                { name: "Blacksburg", distance: 8.5 },
+                { name: "Roanoke", distance: 15.3 },
+                { name: "Christiansburg", distance: 12.1 },
+                { name: "Salem", distance: 18.7 }
+            ];
+            
+            const mockLandmarks = [
+                { name: "Virginia Tech Campus", distance: 6.2 },
+                { name: "Blue Ridge Parkway", distance: 22.1 },
+                { name: "Smith Mountain Lake", distance: 35.4 },
+                { name: "Jefferson National Forest", distance: 12.8 }
+            ];
+            
+            return {
+                cities: mockCities.slice(0, 3),
+                landmarks: mockLandmarks.slice(0, 3)
+            };
+        }
+
         async function performSearch() {
             const query = searchInput.value.trim();
             const filters = {
@@ -447,6 +618,36 @@
             }
         });
 
+        function toggleTrailDetails(trailCard, trail) {
+            const details = trailCard.querySelector('.trail-details');
+            const arrow = trailCard.querySelector('.dropdown-arrow');
+            
+            const isExpanded = details.classList.contains('expanded');
+            
+            // Close all other expanded details
+            document.querySelectorAll('.trail-details.expanded').forEach(detail => {
+                detail.classList.remove('expanded');
+                detail.parentElement.classList.remove('expanded');
+                detail.parentElement.querySelector('.dropdown-arrow').classList.remove('expanded');
+            });
+            
+            if (!isExpanded) {
+                details.classList.add('expanded');
+                trailCard.classList.add('expanded');
+                arrow.classList.add('expanded');
+                
+                // Create elevation chart after DOM update
+                setTimeout(() => {
+                    createElevationChart(`elevation-${trail.id}`, trail.elevation_profile);
+                }, 100);
+                
+                logEvent('trail_details_expanded', { trailId: trail.id });
+            }
+            
+            // Prevent the card click from triggering map selection
+            event.stopPropagation();
+        }
+
         function displayTrails(trails, usedAI = false) {
             const resultsContainer = document.querySelector('.trail-results');
             const headerText = usedAI ? 'AI-Recommended Trails' : 'Top 5 Recommended Trails';
@@ -458,30 +659,102 @@
             }
 
             trails.forEach((trail, index) => {
+                const nearbyLocations = getNearbyLocations(trail.coordinates, trail.distance_to_city || 20);
+                const canvasId = `elevation-${trail.id}`;
+                
                 const trailCard = document.createElement('div');
                 trailCard.className = 'trail-card';
                 trailCard.dataset.trailId = trail.id;
 
                 trailCard.innerHTML = `
-                    <div class="trail-name">${trail.name}</div>
-                    <div class="trail-info">
-                        <span>${trail.length} km</span>
-                        <span class="difficulty-badge difficulty-${trail.difficulty}">${trail.difficulty}</span>
+                    <div class="trail-header">
+                        <div class="trail-main-info">
+                            <div class="trail-name">
+                                ${trail.name}
+                                <span class="dropdown-arrow">▼</span>
+                            </div>
+                            <div class="trail-info">
+                                <span>${trail.length} km</span>
+                                <span class="difficulty-badge difficulty-${trail.difficulty}">${trail.difficulty}</span>
+                            </div>
+                            <div class="trail-info">
+                                <span>Surface: ${trail.surface}</span>
+                                <span>${trail.vehicles}</span>
+                            </div>
+                            <div class="trail-description">${trail.ai_summary || trail.description}</div>
+                            ${trail.max_slope || trail.stream_crossings ? `
+                            <div class="trail-stats">
+                                ${trail.max_slope ? `<span>Max slope: ${trail.max_slope}%</span>` : ''}
+                                ${trail.stream_crossings ? `<span>${trail.stream_crossings} stream crossings</span>` : ''}
+                            </div>
+                            ` : ''}
+                        </div>
                     </div>
-                    <div class="trail-info">
-                        <span>Surface: ${trail.surface}</span>
-                        <span>${trail.vehicles}</span>
+                    
+                    <div class="trail-details">
+                        <div class="details-section">
+                            <div class="details-title">Trail Summary</div>
+                            <div class="details-content">
+                                ${trail.ai_summary || trail.description}
+                                <br><br>
+                                <strong>Technical Details:</strong><br>
+                                Average Slope: ${trail.avg_slope || 'N/A'}%<br>
+                                Maximum Slope: ${trail.max_slope || 'N/A'}%<br>
+                                Stream Crossings: ${trail.stream_crossings || 0}<br>
+                                Distance to City: ${trail.distance_to_city || 'N/A'} km
+                            </div>
+                        </div>
+                        
+                        <div class="details-section">
+                            <div class="details-title">Elevation Profile</div>
+                            <div class="elevation-chart">
+                                <canvas id="${canvasId}" class="chart-canvas" width="280" height="100"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div class="details-section">
+                            <div class="details-title">Nearby Cities</div>
+                            <ul class="location-list">
+                                ${nearbyLocations.cities.map(city => 
+                                    `<li class="location-item">
+                                        ${city.name}
+                                        <span class="location-distance">${city.distance} km</span>
+                                    </li>`
+                                ).join('')}
+                            </ul>
+                        </div>
+                        
+                        <div class="details-section">
+                            <div class="details-title">Nearby Landmarks</div>
+                            <ul class="location-list">
+                                ${nearbyLocations.landmarks.map(landmark => 
+                                    `<li class="location-item">
+                                        ${landmark.name}
+                                        <span class="location-distance">${landmark.distance} km</span>
+                                    </li>`
+                                ).join('')}
+                            </ul>
+                        </div>
                     </div>
-                    <div class="trail-description">${trail.ai_summary || trail.description}</div>
-                    ${trail.max_slope || trail.stream_crossings ? `
-                    <div class="trail-stats">
-                        ${trail.max_slope ? `<span>Max slope: ${trail.max_slope}%</span>` : ''}
-                        ${trail.stream_crossings ? `<span>${trail.stream_crossings} stream crossings</span>` : ''}
-                    </div>
-                    ` : ''}
                 `;
 
-                trailCard.addEventListener('click', () => selectTrail(trail, trailCard));
+                // Add event listeners
+                const headerArea = trailCard.querySelector('.trail-header');
+                const dropdownArrow = trailCard.querySelector('.dropdown-arrow');
+                
+                headerArea.addEventListener('click', (e) => {
+                    if (e.target === dropdownArrow || e.target.closest('.dropdown-arrow')) {
+                        toggleTrailDetails(trailCard, trail);
+                    } else {
+                        selectTrail(trail, trailCard);
+                    }
+                });
+                
+                dropdownArrow.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleTrailDetails(trailCard, trail);
+                });
+
                 resultsContainer.appendChild(trailCard);
             });
         }
