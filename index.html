@@ -44,7 +44,6 @@
         }
 
         .search-box {
-            position: relative;
             margin-bottom: 20px;
         }
 
@@ -56,6 +55,7 @@
             font-size: 16px;
             background: white;
             transition: all 0.3s ease;
+            margin-bottom: 10px;
         }
 
         .search-input:focus {
@@ -65,16 +65,16 @@
         }
 
         .search-btn {
-            position: absolute;
-            right: 5px;
-            top: 5px;
+            width: 100%;
             background: #667eea;
             color: white;
             border: none;
-            padding: 10px 15px;
+            padding: 12px 20px;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
+            font-size: 16px;
+            font-weight: 600;
         }
 
         .search-btn:hover {
@@ -354,10 +354,11 @@
             <div class="logo">TrailFinder</div>
             
             <div class="search-box">
+                <label class="filter-label">Description:</label>
                 <input type="text" 
                        class="search-input" 
                        id="searchInput"
-                       placeholder="Describe your ideal trail... (e.g., 'moderate hike with water views')"
+                       placeholder="(moderate hike with water views)"
                        value="">
                 <button class="search-btn" id="searchBtn">Find</button>
             </div>
@@ -367,36 +368,6 @@
                     <label class="filter-label">Trail Length</label>
                     <input type="range" class="filter-range" id="lengthFilter" min="0" max="50" value="25">
                     <div class="range-display" id="lengthDisplay">Up to 25 km</div>
-                </div>
-
-                <div class="filter-group">
-                    <label class="filter-label">Difficulty</label>
-                    <select class="filter-select" id="difficultyFilter">
-                        <option value="">Any Difficulty</option>
-                        <option value="easy">Easy</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="hard">Hard</option>
-                    </select>
-                </div>
-
-                <div class="filter-group">
-                    <label class="filter-label">Trail Surface</label>
-                    <select class="filter-select" id="surfaceFilter">
-                        <option value="">Any Surface</option>
-                        <option value="dirt">Dirt/Natural</option>
-                        <option value="gravel">Gravel</option>
-                        <option value="sand">Sand</option>
-                        <option value="rock">Rock</option>
-                    </select>
-                </div>
-
-                <div class="filter-group">
-                    <label class="filter-label">Vehicles Allowed</label>
-                    <select class="filter-select" id="vehicleFilter">
-                        <option value="">No Preference</option>
-                        <option value="hiking">Hiking Only</option>
-                        <option value="biking">Biking Allowed</option>
-                    </select>
                 </div>
             </div>
 
@@ -435,9 +406,6 @@
         const searchBtn = document.getElementById('searchBtn');
         const lengthFilter = document.getElementById('lengthFilter');
         const lengthDisplay = document.getElementById('lengthDisplay');
-        const difficultyFilter = document.getElementById('difficultyFilter');
-        const surfaceFilter = document.getElementById('surfaceFilter');
-        const vehicleFilter = document.getElementById('vehicleFilter');
         const trailResults = document.getElementById('trailResults');
         const loadingState = document.getElementById('loadingState');
         const errorMessage = document.getElementById('errorMessage');
@@ -546,10 +514,7 @@
         async function performSearch() {
             const query = searchInput.value.trim();
             const filters = {
-                length: parseInt(lengthFilter.value),
-                difficulty: difficultyFilter.value,
-                surface: surfaceFilter.value,
-                vehicles: vehicleFilter.value
+                length: parseInt(lengthFilter.value)
             };
 
             logEvent('search_initiated', { query, filters });
@@ -650,8 +615,8 @@
 
         function displayTrails(trails, usedAI = false) {
             const resultsContainer = document.querySelector('.trail-results');
-            const headerText = usedAI ? 'AI-Recommended Trails' : 'Top 5 Recommended Trails';
-            resultsContainer.innerHTML = `<div class="results-header">${headerText}${usedAI ? '<span class="ai-badge">AI</span>' : ''}</div>`;
+            const headerText = 'Top 5 Recommended Trails';  // Always show same title
+            resultsContainer.innerHTML = `<div class="results-header">${headerText}</div>`;
 
             if (!trails || trails.length === 0) {
                 resultsContainer.innerHTML += '<div style="text-align: center; color: #718096; padding: 20px;">No trails found matching your criteria.</div>';
@@ -671,22 +636,16 @@
                         <div class="trail-main-info">
                             <div class="trail-name">
                                 ${trail.name}
-                                <span class="dropdown-arrow">▼</span>
+                                <span class="dropdown-arrow">&#9660;</span>
                             </div>
                             <div class="trail-info">
                                 <span>${trail.length} km</span>
                                 <span class="difficulty-badge difficulty-${trail.difficulty}">${trail.difficulty}</span>
                             </div>
                             <div class="trail-info">
-                                <span>Surface: ${trail.surface}</span>
-                                <span>${trail.vehicles}</span>
+                                <span></span>
+                                ${trail.max_slope > 0 ? `<span>Max slope: ${trail.max_slope}%</span>` : '<span>Flat trail</span>'}
                             </div>
-                            ${trail.max_slope || trail.stream_crossings ? `
-                            <div class="trail-stats">
-                                ${trail.max_slope ? `<span>Max slope: ${trail.max_slope}%</span>` : ''}
-                                ${trail.stream_crossings ? `<span>${trail.stream_crossings} stream crossings</span>` : ''}
-                            </div>
-                            ` : ''}
                         </div>
                     </div>
                     
@@ -697,10 +656,11 @@
                                 ${trail.ai_summary || trail.description}
                                 <br><br>
                                 <strong>Technical Details:</strong><br>
-                                Average Slope: ${trail.avg_slope || 'N/A'}%<br>
-                                Maximum Slope: ${trail.max_slope || 'N/A'}%<br>
-                                Stream Crossings: ${trail.stream_crossings || 0}<br>
-                                Distance to City: ${trail.distance_to_city || 'N/A'} km
+                                Length: ${trail.length} km<br>
+                                Average Slope: ${trail.avg_slope}%<br>
+                                Maximum Slope: ${trail.max_slope}%<br>
+                                Distance to City: ${trail.distance_to_city} km<br>
+                                Vehicle Access: ${trail.vehicles === 'biking' ? 'Bikes allowed' : 'Hiking only'}
                             </div>
                         </div>
                         
@@ -714,24 +674,30 @@
                         <div class="details-section">
                             <div class="details-title">Nearby Cities</div>
                             <ul class="location-list">
-                                ${nearbyLocations.cities.map(city => 
-                                    `<li class="location-item">
-                                        ${city.name}
-                                        <span class="location-distance">${city.distance} km</span>
-                                    </li>`
-                                ).join('')}
+                                ${trail.raw_trail_data && trail.raw_trail_data.closest_cities ? 
+                                    trail.raw_trail_data.closest_cities.slice(0, 3).map(city => 
+                                        `<li class="location-item">
+                                            ${city[0]}
+                                            <span class="location-distance">${city[1]} km</span>
+                                        </li>`
+                                    ).join('') :
+                                    `<li class="location-item">Data not available</li>`
+                                }
                             </ul>
                         </div>
                         
                         <div class="details-section">
-                            <div class="details-title">Nearby Landmarks</div>
+                            <div class="details-title">Nearby Natural Features</div>
                             <ul class="location-list">
-                                ${nearbyLocations.landmarks.map(landmark => 
-                                    `<li class="location-item">
-                                        ${landmark.name}
-                                        <span class="location-distance">${landmark.distance} km</span>
-                                    </li>`
-                                ).join('')}
+                                ${trail.raw_trail_data && trail.raw_trail_data.closest_natural ? 
+                                    trail.raw_trail_data.closest_natural.slice(0, 3).map(feature => 
+                                        `<li class="location-item">
+                                            ${feature[0]}
+                                            <span class="location-distance">${feature[1]} km</span>
+                                        </li>`
+                                    ).join('') :
+                                    `<li class="location-item">Data not available</li>`
+                                }
                             </ul>
                         </div>
                     </div>
@@ -770,7 +736,6 @@
                     .bindPopup(`
                         <div style="min-width: 200px;">
                             <strong>${trail.name}</strong><br>
-                            <span style="color: #666;">${trail.length} km • ${trail.difficulty}</span><br>
                             <div style="margin-top: 8px; font-size: 13px;">
                                 ${trail.ai_summary || trail.description}
                             </div>
@@ -820,16 +785,6 @@
 
             logEvent('trail_selected', { trailId: trail.id, trailName: trail.name });
         }
-
-        // Event listeners
-        [difficultyFilter, surfaceFilter, vehicleFilter].forEach(filter => {
-            filter.addEventListener('change', function() {
-                logEvent('filter_changed', { 
-                    filter: this.id, 
-                    value: this.value 
-                });
-            });
-        });
 
         // Initialize the app when page loads
         window.addEventListener('load', function() {

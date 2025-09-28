@@ -22,120 +22,6 @@ if not ANTHROPIC_API_KEY:
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 
-# Load trail data
-def load_trails():
-    """Load trails from trails.json file"""
-    try:
-        with open('trails.json', 'r') as f:
-            trails_data = json.load(f)
-        
-        # Convert to the format expected by the frontend
-        processed_trails = []
-        for trail in trails_data:
-            processed_trail = {
-                'id': trail['id'],
-                'name': trail['trail_name'],
-                'length': trail['trail_length_km'],
-                'difficulty': classify_difficulty(trail),
-                'surface': normalize_surface(trail['trail_surface']),
-                'vehicles': get_vehicle_type(trail),
-                'description': generate_description(trail),
-                'coordinates': get_coordinates_for_trail(trail['id']),
-                'elevation_profile': trail['elevation_profile_m'],
-                'max_slope': trail['max_slope_pct'],
-                'avg_slope': trail['avg_slope_pct'],
-                'stream_crossings': trail['stream_crossings_count'],
-                'distance_to_city': trail['proximity_to_city_km']
-            }
-            processed_trails.append(processed_trail)
-        
-        return processed_trails
-    except FileNotFoundError:
-        logger.error("trails.json not found, using fallback data")
-        return get_fallback_trails()
-
-def classify_difficulty(trail):
-    """Classify trail difficulty based on features"""
-    max_slope = trail['max_slope_pct']
-    length = trail['trail_length_km']
-    avg_slope = trail['avg_slope_pct']
-    
-    if max_slope > 15 or (length > 10 and avg_slope > 8):
-        return 'hard'
-    elif max_slope > 8 or (length > 5 and avg_slope > 5):
-        return 'moderate'
-    else:
-        return 'easy'
-
-def normalize_surface(surface):
-    """Normalize surface types"""
-    surface_mapping = {
-        'dirt': 'dirt',
-        'rock-dirt': 'dirt',
-        'sand-packed': 'sand',
-        'sand': 'sand',
-        'gravel': 'gravel'
-    }
-    return surface_mapping.get(surface, surface)
-
-def get_vehicle_type(trail):
-    """Determine vehicle allowance"""
-    if trail['bicycles_allowed']:
-        return 'biking'
-    else:
-        return 'hiking'
-
-def generate_description(trail):
-    """Generate a basic description from trail features"""
-    difficulty = classify_difficulty(trail)
-    surface = trail['trail_surface']
-    length = trail['trail_length_km']
-    
-    descriptions = {
-        'easy': f"A gentle {length}km trail with {surface} surface, perfect for beginners.",
-        'moderate': f"A {length}km {surface} trail offering moderate challenge with scenic views.",
-        'hard': f"A challenging {length}km {surface} trail for experienced hikers seeking adventure."
-    }
-    
-    return descriptions.get(difficulty, f"A {length}km trail with {surface} surface.")
-
-def get_coordinates_for_trail(trail_id):
-    """Get coordinates for trail"""
-    coordinate_mapping = {
-        'trail_001': [37.2431, -80.4139],
-        'trail_002': [37.3726, -80.1450],
-        'trail_003': [37.8521, -79.0985],
-        'trail_004': [38.5767, -78.3011],
-        'trail_005': [36.9147, -76.0074],
-        'trail_006': [37.5407, -77.4360],
-        'trail_007': [38.9517, -78.2733],
-        'trail_008': [36.7682, -75.9374],
-    }
-    return coordinate_mapping.get(trail_id, [37.2431, -80.4139])
-
-def get_fallback_trails():
-    """Fallback trail data if trails.json is not available"""
-    return [
-        {
-            'id': 'fallback_001',
-            'name': 'Cascades Falls Trail',
-            'length': 4.0,
-            'difficulty': 'moderate',
-            'surface': 'dirt',
-            'vehicles': 'hiking',
-            'description': 'Beautiful waterfall hike with moderate elevation gain.',
-            'coordinates': [37.3551, -80.5951],
-            'elevation_profile': [400, 420, 450, 480, 520, 580, 620],
-            'max_slope': 12.5,
-            'avg_slope': 6.8,
-            'stream_crossings': 3,
-            'distance_to_city': 15.2
-        }
-    ]
-
-# Load trails at startup
-TRAILS_DATA = load_trails()
-
 def query_claude_api(messages, max_tokens=150):
     """Call Anthropic Claude API"""
     headers = {
@@ -158,7 +44,7 @@ def query_claude_api(messages, max_tokens=150):
             })
     
     payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-20250514",  # Using stable model
         "max_tokens": max_tokens,
         "temperature": 0.3,
         "messages": claude_messages
@@ -201,6 +87,73 @@ def query_claude_api(messages, max_tokens=150):
     except Exception as e:
         logger.error("claude_api_error", error=str(e))
         return f"Error: {str(e)}"
+
+def extract_coordinates_from_geometry(geometry_string):
+    """Extract coordinates from LINESTRING geometry"""
+    try:
+        # Extract coordinates from "LINESTRING (-77.38244417053585 38.971972208257455, ...)"
+        coords_part = geometry_string.replace('LINESTRING (', '').replace(')', '')
+        first_point = coords_part.split(',')[0].strip()
+        lon, lat = first_point.split()
+        return [float(lat), float(lon)]
+    except:
+        return [37.2431, -80.4139]  # Default fallback coordinates
+
+def classify_difficulty_new_format(trail):
+    """Classify trail difficulty based on new format features"""
+    max_slope = trail['slope_max']
+    length = trail['trail_length (km)']
+    percent_steep = trail['percent_steep']
+    
+    if max_slope > 15 or (length > 10 and percent_steep > 20):
+        return 'hard'
+    elif max_slope > 8 or (length > 5 and percent_steep > 10):
+        return 'moderate'
+    else:
+        return 'easy'
+
+def generate_basic_description_new_format(trail):
+    """Generate a simple basic description for new format without AI"""
+    difficulty = classify_difficulty_new_format(trail)
+    length = round(trail['trail_length (km)'], 1)
+    
+    return f"A {difficulty} {length}km trail."
+
+# Load trail data
+def load_trails():
+    """Load trails from trails_100.json file"""
+    try:
+        with open('trails_100.json', 'r') as f:
+            trails_data = json.load(f)
+        
+        # Convert to the format expected by the frontend
+        processed_trails = []
+        for i, trail in enumerate(trails_data):
+            processed_trail = {
+                'id': f'trail_{i:03d}',  # Generate ID since it's not in the JSON
+                'name': trail['trail_name'],
+                'length': round(trail['trail_length (km)'], 1),  # Round to 1 decimal place
+                'difficulty': classify_difficulty_new_format(trail),
+                'surface': 'dirt',  # Default since not specified in new format
+                'vehicles': 'biking' if trail['bikes_allowed'] == 1 else 'hiking',
+                'description': generate_basic_description_new_format(trail),
+                'coordinates': extract_coordinates_from_geometry(trail['geometry']),
+                'elevation_profile': [int(x) for x in trail['elevation_profile']],
+                'max_slope': round(trail['slope_max'], 1),  # Round slope too
+                'avg_slope': round(trail['average_slope'], 1),  # Round average slope
+                'stream_crossings': 0,  # Not available in new format
+                'distance_to_city': round(trail['distance_to_city'], 1),  # Round distance to city
+                'raw_trail_data': trail  # Keep original data for AI generation later
+            }
+            processed_trails.append(processed_trail)
+        
+        return processed_trails
+    except FileNotFoundError:
+        logger.error("trails_100.json not found, using fallback data")
+        return []  # Return empty list instead of fallback
+
+# Load trails at startup
+TRAILS_DATA = load_trails()
 
 def passes_filters(trail, filters):
     """Check if trail passes the specified filters"""
@@ -248,8 +201,6 @@ def get_keyword_trail_recommendations(user_query, trails):
             score += 5
         
         # Feature matching
-        if 'water' in query_lower and trail.get('stream_crossings', 0) > 0:
-            score += 5
         if 'bike' in query_lower and trail['vehicles'] == 'biking':
             score += 8
         if 'hike' in query_lower and trail['vehicles'] == 'hiking':
@@ -272,7 +223,7 @@ def get_claude_trail_recommendations(user_query, filters):
     # Try AI first
     try:
         trail_descriptions = []
-        for trail in filtered_trails:
+        for trail in filtered_trails[:20]:  # Limit to first 20 trails to avoid token limits
             desc = f"ID {trail['id']}: {trail['name']} - {trail['length']}km, {trail['difficulty']} difficulty, {trail['surface']} surface, {trail['vehicles']}"
             trail_descriptions.append(desc)
         
@@ -324,6 +275,31 @@ Rank these trails from best match to worst match for this user. Respond with onl
         logger.info("using_keyword_fallback", error=str(e))
         return get_keyword_trail_recommendations(user_query, filtered_trails)
 
+def generate_trail_summary_claude(trail):
+    """Generate engaging trail summary using Claude"""
+    messages = [
+        {
+            "role": "system",
+            "content": "You are an enthusiastic trail guide who writes engaging, concise descriptions. Write 1-2 sentences that capture what makes each trail special."
+        },
+        {
+            "role": "user",
+            "content": f"""Trail: {trail['name']}
+Length: {trail['length']} km
+Difficulty: {trail['difficulty']}
+Surface: {trail['surface']}
+Max Slope: {trail.get('max_slope', 'N/A')}%
+
+Write an engaging 1-2 sentence summary highlighting what makes this trail unique and appealing to hikers."""
+        }
+    ]
+    
+    try:
+        summary = query_claude_api(messages, max_tokens=80)
+        return summary if summary and len(summary) > 10 and not summary.startswith('Error:') else trail['description']
+    except:
+        return trail['description']
+
 @app.route('/api/search', methods=['POST'])
 def search_trails():
     try:
@@ -354,97 +330,6 @@ def search_trails():
     except Exception as e:
         logger.error("search_api_error", error=str(e))
         return jsonify({'error': 'Search failed'}), 500
-
-def generate_trail_summary_claude(trail):
-    """Generate engaging trail summary using Claude"""
-    messages = [
-        {
-            "role": "system",
-            "content": "You are an enthusiastic trail guide who writes engaging, concise descriptions. Write 1-2 sentences that capture what makes each trail special."
-        },
-        {
-            "role": "user",
-            "content": f"""Trail: {trail['name']}
-Length: {trail['length']} km
-Difficulty: {trail['difficulty']}
-Surface: {trail['surface']}
-Max Slope: {trail.get('max_slope', 'N/A')}%
-
-Write an engaging 1-2 sentence summary highlighting what makes this trail unique and appealing to hikers."""
-        }
-    ]
-    
-    try:
-        summary = query_claude_api(messages, max_tokens=80)
-        return summary if summary and len(summary) > 10 and not summary.startswith('Error:') else trail['description']
-    except:
-        return trail['description']
-
-@app.route('/api/test-llama', methods=['GET'])
-def test_llama_access():
-    """Test endpoint to verify Llama API access"""
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    
-    payload = {
-        "inputs": "Hello, how are you?",
-        "parameters": {
-            "max_new_tokens": 20,
-            "temperature": 0.1
-        }
-    }
-    
-    try:
-        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
-        
-        # Get raw response text to see what's actually being returned
-        raw_text = response.text
-        
-        try:
-            json_response = response.json()
-        except:
-            json_response = f"Could not parse JSON. Raw response: {raw_text}"
-        
-        return jsonify({
-            'status_code': response.status_code,
-            'raw_response': raw_text[:500],  # First 500 chars
-            'json_response': json_response,
-            'headers': dict(response.headers),
-            'success': response.status_code in [200, 202]
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'success': False
-        })
-
-@app.route('/api/test-public', methods=['GET'])
-def test_public_model():
-    """Test with a definitely public model"""
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    public_url = "https://api-inference.huggingface.co/models/gpt2"
-    
-    payload = {
-        "inputs": "The weather today is",
-        "parameters": {
-            "max_new_tokens": 10
-        }
-    }
-    
-    try:
-        response = requests.post(public_url, headers=headers, json=payload, timeout=30)
-        
-        return jsonify({
-            'status_code': response.status_code,
-            'response': response.json() if response.status_code in [200, 202] else response.text,
-            'success': response.status_code in [200, 202]
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'success': False
-        })
 
 @app.route('/api/trails', methods=['GET'])
 def get_all_trails():
