@@ -5,6 +5,7 @@ import json
 import structlog
 import os
 from dotenv import load_dotenv
+import math
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +22,21 @@ if not ANTHROPIC_API_KEY:
     raise ValueError("ANTHROPIC_API_KEY environment variable is required")
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """Calculate the distance between two points on Earth using the Haversine formula"""
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.asin(math.sqrt(a))
+    
+    # Radius of earth in kilometers
+    r = 6371
+    return c * r
 
 def query_claude_api(messages, max_tokens=150):
     """Call Anthropic Claude API"""
@@ -44,7 +60,7 @@ def query_claude_api(messages, max_tokens=150):
             })
     
     payload = {
-        "model": "claude-sonnet-4-20250514",  # Using stable model
+        "model": "claude-sonnet-4-20250514",
         "max_tokens": max_tokens,
         "temperature": 0.3,
         "messages": claude_messages
@@ -91,13 +107,12 @@ def query_claude_api(messages, max_tokens=150):
 def extract_coordinates_from_geometry(geometry_string):
     """Extract coordinates from LINESTRING geometry"""
     try:
-        # Extract coordinates from "LINESTRING (-77.38244417053585 38.971972208257455, ...)"
         coords_part = geometry_string.replace('LINESTRING (', '').replace(')', '')
         first_point = coords_part.split(',')[0].strip()
         lon, lat = first_point.split()
         return [float(lat), float(lon)]
     except:
-        return [37.2431, -80.4139]  # Default fallback coordinates
+        return [37.2431, -80.4139]
 
 def classify_difficulty_new_format(trail):
     """Classify trail difficulty based on new format features"""
@@ -119,43 +134,40 @@ def generate_basic_description_new_format(trail):
     
     return f"A {difficulty} {length}km trail."
 
-# Load trail data
 def load_trails():
     """Load trails from trails_100.json file"""
     try:
         with open('trails_100.json', 'r') as f:
             trails_data = json.load(f)
         
-        # Convert to the format expected by the frontend
         processed_trails = []
         for i, trail in enumerate(trails_data):
             processed_trail = {
-                'id': f'trail_{i:03d}',  # Generate ID since it's not in the JSON
+                'id': f'trail_{i:03d}',
                 'name': trail['trail_name'],
-                'length': round(trail['trail_length (km)'], 1),  # Round to 1 decimal place
+                'length': round(trail['trail_length (km)'], 1),
                 'difficulty': classify_difficulty_new_format(trail),
-                'surface': 'dirt',  # Default since not specified in new format
+                'surface': 'dirt',
                 'vehicles': 'biking' if trail['bikes_allowed'] == 1 else 'hiking',
                 'description': generate_basic_description_new_format(trail),
                 'coordinates': extract_coordinates_from_geometry(trail['geometry']),
                 'elevation_profile': [int(x) for x in trail['elevation_profile']],
-                'max_slope': round(trail['slope_max'], 1),  # Round slope too
-                'avg_slope': round(trail['average_slope'], 1),  # Round average slope
-                'stream_crossings': 0,  # Not available in new format
-                'distance_to_city': round(trail['distance_to_city'], 1),  # Round distance to city
-                'raw_trail_data': trail  # Keep original data for AI generation later
+                'max_slope': round(trail['slope_max'], 1),
+                'avg_slope': round(trail['average_slope'], 1),
+                'distance_to_water': round(trail['distance_to_water'], 1),
+                'raw_trail_data': trail
             }
             processed_trails.append(processed_trail)
         
         return processed_trails
     except FileNotFoundError:
-        logger.error("trails_100.json not found, using fallback data")
-        return []  # Return empty list instead of fallback
+        logger.error("trails_100.json not found")
+        return []
 
 # Load trails at startup
 TRAILS_DATA = load_trails()
 
-def passes_filters(trail, filters):
+def passes_filters(trail, filters, user_location=None):
     """Check if trail passes the specified filters"""
     if filters.get('length') and trail['length'] > filters['length']:
         return False
@@ -168,11 +180,31 @@ def passes_filters(trail, filters):
             return False
         elif filters['vehicles'] == 'biking' and trail['vehicles'] != 'biking':
             return False
+    
+    # Location filter
+    if filters.get('max_distance') and user_location:
+        trail_distance = haversine_distance(
+            user_location['lat'], user_location['lon'],
+            trail['coordinates'][0], trail['coordinates'][1]
+        )
+        if trail_distance > filters['max_distance']:
+            return False
+            
     return True
 
-def filter_trails_basic(filters):
+def filter_trails_basic(filters, user_location=None):
     """Basic filtering without AI"""
-    filtered = [trail for trail in TRAILS_DATA if passes_filters(trail, filters)]
+    filtered = [trail for trail in TRAILS_DATA if passes_filters(trail, filters, user_location)]
+    
+    # If user location is provided, sort by distance
+    if user_location:
+        for trail in filtered:
+            trail['distance_from_user'] = haversine_distance(
+                user_location['lat'], user_location['lon'],
+                trail['coordinates'][0], trail['coordinates'][1]
+            )
+        filtered.sort(key=lambda x: x.get('distance_from_user', float('inf')))
+    
     return filtered[:5]
 
 def get_keyword_trail_recommendations(user_query, trails):
@@ -184,7 +216,6 @@ def get_keyword_trail_recommendations(user_query, trails):
         score = 0
         trail_text = f"{trail['name']} {trail['description']}".lower()
         
-        # Difficulty matching
         if 'easy' in query_lower and trail['difficulty'] == 'easy':
             score += 10
         elif 'moderate' in query_lower and trail['difficulty'] == 'moderate':
@@ -194,43 +225,61 @@ def get_keyword_trail_recommendations(user_query, trails):
         elif 'challenging' in query_lower and trail['difficulty'] == 'hard':
             score += 8
         
-        # Length matching
         if 'short' in query_lower and trail['length'] < 5:
             score += 5
         elif 'long' in query_lower and trail['length'] > 10:
             score += 5
         
-        # Feature matching
         if 'bike' in query_lower and trail['vehicles'] == 'biking':
             score += 8
         if 'hike' in query_lower and trail['vehicles'] == 'hiking':
             score += 3
         
+        # If user location is available, prioritize closer trails slightly
+        if hasattr(trail, 'distance_from_user'):
+            if trail['distance_from_user'] < 10:  # Within 10km
+                score += 3
+            elif trail['distance_from_user'] < 25:  # Within 25km
+                score += 1
+        
         scored_trails.append((score, trail))
     
-    # Sort by score and return top 5
     scored_trails.sort(key=lambda x: x[0], reverse=True)
     return [trail for score, trail in scored_trails[:5]]
 
-def get_claude_trail_recommendations(user_query, filters):
+def get_claude_trail_recommendations(user_query, filters, user_location=None):
     """Use Claude to rank trails based on user query with keyword fallback"""
     
-    # Filter trails first
-    filtered_trails = [trail for trail in TRAILS_DATA if passes_filters(trail, filters)]
+    filtered_trails = [trail for trail in TRAILS_DATA if passes_filters(trail, filters, user_location)]
     if not filtered_trails:
         filtered_trails = TRAILS_DATA
     
-    # Try AI first
+    # Add distance information if user location is available
+    if user_location:
+        for trail in filtered_trails:
+            trail['distance_from_user'] = haversine_distance(
+                user_location['lat'], user_location['lon'],
+                trail['coordinates'][0], trail['coordinates'][1]
+            )
+        filtered_trails.sort(key=lambda x: x.get('distance_from_user', float('inf')))
+    
     try:
         trail_descriptions = []
-        for trail in filtered_trails[:20]:  # Limit to first 20 trails to avoid token limits
-            desc = f"ID {trail['id']}: {trail['name']} - {trail['length']}km, {trail['difficulty']} difficulty, {trail['surface']} surface, {trail['vehicles']}"
+        for trail in filtered_trails[:20]:
+            distance_info = ""
+            if hasattr(trail, 'distance_from_user'):
+                distance_info = f" ({round(trail['distance_from_user'], 1)}km away)"
+            desc = f"ID {trail['id']}: {trail['name']} - {trail['length']}km, {trail['difficulty']} difficulty, {trail['vehicles']}{distance_info}"
             trail_descriptions.append(desc)
+        
+        location_context = ""
+        if user_location:
+            location_context = " Consider distance from user when ranking - closer trails are generally preferable."
         
         messages = [
             {
                 "role": "system",
-                "content": "You are a trail recommendation expert. Analyze user requests and recommend trails by ranking them from most to least suitable. Respond with ONLY a comma-separated list of trail IDs in order of recommendation."
+                "content": f"You are a trail recommendation expert. Analyze user requests and recommend trails by ranking them from most to least suitable.{location_context} Respond with ONLY a comma-separated list of trail IDs in order of recommendation."
             },
             {
                 "role": "user",
@@ -246,9 +295,7 @@ Rank these trails from best match to worst match for this user. Respond with onl
         logger.info("attempting_ai_recommendation")
         response = query_claude_api(messages, max_tokens=100)
         
-        # Check if response contains an error
         if not response.startswith('Error:'):
-            # Extract trail IDs from response
             import re
             trail_ids = re.findall(r'trail_\d+', response)
             
@@ -267,7 +314,6 @@ Rank these trails from best match to worst match for this user. Respond with onl
                     logger.info("ai_recommendation_success", count=len(recommended))
                     return recommended
         
-        # If AI failed, fall back to keyword matching
         logger.info("ai_failed_using_keyword_fallback", response=response[:100])
         return get_keyword_trail_recommendations(user_query, filtered_trails)
         
@@ -277,6 +323,10 @@ Rank these trails from best match to worst match for this user. Respond with onl
 
 def generate_trail_summary_claude(trail):
     """Generate engaging trail summary using Claude"""
+    distance_info = ""
+    if hasattr(trail, 'distance_from_user'):
+        distance_info = f" Located {round(trail['distance_from_user'], 1)}km from your location."
+    
     messages = [
         {
             "role": "system",
@@ -287,8 +337,7 @@ def generate_trail_summary_claude(trail):
             "content": f"""Trail: {trail['name']}
 Length: {trail['length']} km
 Difficulty: {trail['difficulty']}
-Surface: {trail['surface']}
-Max Slope: {trail.get('max_slope', 'N/A')}%
+Max Slope: {trail.get('max_slope', 'N/A')}%{distance_info}
 
 Write an engaging 1-2 sentence summary highlighting what makes this trail unique and appealing to hikers."""
         }
@@ -306,15 +355,15 @@ def search_trails():
         data = request.get_json()
         query = data.get('query', '')
         filters = data.get('filters', {})
+        user_location = data.get('user_location')
         
-        logger.info("trail_search_request", query=query, filters=filters)
+        logger.info("trail_search_request", query=query, filters=filters, has_location=bool(user_location))
         
         if query.strip():
-            recommended_trails = get_claude_trail_recommendations(query, filters)
+            recommended_trails = get_claude_trail_recommendations(query, filters, user_location)
         else:
-            recommended_trails = filter_trails_basic(filters)
+            recommended_trails = filter_trails_basic(filters, user_location)
         
-        # Generate AI summaries for trails
         for trail in recommended_trails:
             if query.strip():
                 trail['ai_summary'] = generate_trail_summary_claude(trail)

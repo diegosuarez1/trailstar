@@ -113,6 +113,52 @@
             color: #718096;
         }
 
+        .location-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .location-btn {
+            flex: 1;
+            background: #48bb78;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .location-btn:hover {
+            background: #38a169;
+        }
+
+        .location-btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .location-status {
+            margin-top: 5px;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .location-success {
+            color: #22543d;
+        }
+
+        .location-error {
+            color: #c53030;
+        }
+
+        .location-pending {
+            color: #718096;
+        }
+
         .trail-results {
             margin-top: 20px;
         }
@@ -200,6 +246,17 @@
         .difficulty-easy { background: #c6f6d5; color: #22543d; }
         .difficulty-moderate { background: #feebc8; color: #c05621; }
         .difficulty-hard { background: #fed7d7; color: #c53030; }
+
+        .distance-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            background: #bee3f8;
+            color: #2a4365;
+            margin-left: 5px;
+        }
 
         .trail-description {
             font-size: 13px;
@@ -369,6 +426,17 @@
                     <input type="range" class="filter-range" id="lengthFilter" min="0" max="50" value="25">
                     <div class="range-display" id="lengthDisplay">Up to 25 km</div>
                 </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Distance from Me</label>
+                    <input type="range" class="filter-range" id="distanceFilter" min="5" max="100" value="50" disabled>
+                    <div class="range-display" id="distanceDisplay">Within 50 km</div>
+                    <div class="location-controls">
+                        <button class="location-btn" id="getLocationBtn">Get My Location</button>
+                        <button class="location-btn" id="clearLocationBtn" style="background: #f56565;" disabled>Clear</button>
+                    </div>
+                    <div class="location-status" id="locationStatus">Click "Get My Location" to enable distance filtering</div>
+                </div>
             </div>
 
             <div class="error-message" id="errorMessage"></div>
@@ -400,15 +468,22 @@
 
         let trailMarkers = [];
         let selectedTrail = null;
+        let userLocation = null;
+        let userLocationMarker = null;
 
         // DOM elements
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
         const lengthFilter = document.getElementById('lengthFilter');
         const lengthDisplay = document.getElementById('lengthDisplay');
+        const distanceFilter = document.getElementById('distanceFilter');
+        const distanceDisplay = document.getElementById('distanceDisplay');
         const trailResults = document.getElementById('trailResults');
         const loadingState = document.getElementById('loadingState');
         const errorMessage = document.getElementById('errorMessage');
+        const getLocationBtn = document.getElementById('getLocationBtn');
+        const clearLocationBtn = document.getElementById('clearLocationBtn');
+        const locationStatus = document.getElementById('locationStatus');
 
         // Configure API base URL - adjust this based on your setup
         const API_BASE = window.location.origin.includes('localhost') ? 'http://localhost:5000' : '';
@@ -433,6 +508,101 @@
         lengthFilter.addEventListener('input', function() {
             lengthDisplay.textContent = `Up to ${this.value} km`;
             logEvent('filter_changed', { filter: 'length', value: this.value });
+        });
+
+        distanceFilter.addEventListener('input', function() {
+            distanceDisplay.textContent = `Within ${this.value} km`;
+            logEvent('filter_changed', { filter: 'distance', value: this.value });
+        });
+
+        // Location functionality
+        function updateLocationStatus(message, type = 'pending') {
+            locationStatus.textContent = message;
+            locationStatus.className = `location-status location-${type}`;
+        }
+
+        function enableLocationFilter() {
+            distanceFilter.disabled = false;
+            clearLocationBtn.disabled = false;
+            distanceFilter.style.opacity = '1';
+        }
+
+        function disableLocationFilter() {
+            distanceFilter.disabled = true;
+            clearLocationBtn.disabled = true;
+            distanceFilter.style.opacity = '0.5';
+        }
+
+        getLocationBtn.addEventListener('click', function() {
+            if (!navigator.geolocation) {
+                updateLocationStatus('Geolocation not supported by browser', 'error');
+                return;
+            }
+
+            getLocationBtn.disabled = true;
+            updateLocationStatus('Getting your location...', 'pending');
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    userLocation = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude
+                    };
+
+                    // Add user location marker to map
+                    if (userLocationMarker) {
+                        map.removeLayer(userLocationMarker);
+                    }
+                    
+                    userLocationMarker = L.marker([userLocation.lat, userLocation.lon], {
+                        icon: L.divIcon({
+                            className: 'user-location-marker',
+                            html: '<div style="background: #ff4444; border: 3px solid white; border-radius: 50%; width: 16px; height: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8]
+                        })
+                    }).bindPopup('Your Location').addTo(map);
+
+                    enableLocationFilter();
+                    updateLocationStatus(`Location found! (${userLocation.lat.toFixed(3)}, ${userLocation.lon.toFixed(3)})`, 'success');
+                    getLocationBtn.disabled = false;
+                    
+                    logEvent('location_acquired', { lat: userLocation.lat, lon: userLocation.lon });
+                },
+                function(error) {
+                    let message = 'Failed to get location';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            message = 'Location access denied by user';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            message = 'Location information unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            message = 'Location request timed out';
+                            break;
+                    }
+                    updateLocationStatus(message, 'error');
+                    getLocationBtn.disabled = false;
+                    logEvent('location_error', { error: message });
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 300000 // 5 minutes
+                }
+            );
+        });
+
+        clearLocationBtn.addEventListener('click', function() {
+            userLocation = null;
+            if (userLocationMarker) {
+                map.removeLayer(userLocationMarker);
+                userLocationMarker = null;
+            }
+            disableLocationFilter();
+            updateLocationStatus('Click "Get My Location" to enable distance filtering', 'pending');
+            logEvent('location_cleared');
         });
 
         function createElevationChart(canvasId, elevationProfile) {
@@ -489,35 +659,17 @@
             ctx.stroke();
         }
 
-        function getNearbyLocations(coordinates, distance) {
-            // Mock data for nearby cities and landmarks
-            const mockCities = [
-                { name: "Blacksburg", distance: 8.5 },
-                { name: "Roanoke", distance: 15.3 },
-                { name: "Christiansburg", distance: 12.1 },
-                { name: "Salem", distance: 18.7 }
-            ];
-            
-            const mockLandmarks = [
-                { name: "Virginia Tech Campus", distance: 6.2 },
-                { name: "Blue Ridge Parkway", distance: 22.1 },
-                { name: "Smith Mountain Lake", distance: 35.4 },
-                { name: "Jefferson National Forest", distance: 12.8 }
-            ];
-            
-            return {
-                cities: mockCities.slice(0, 3),
-                landmarks: mockLandmarks.slice(0, 3)
-            };
-        }
-
         async function performSearch() {
             const query = searchInput.value.trim();
             const filters = {
                 length: parseInt(lengthFilter.value)
             };
 
-            logEvent('search_initiated', { query, filters });
+            if (userLocation && !distanceFilter.disabled) {
+                filters.max_distance = parseInt(distanceFilter.value);
+            }
+
+            logEvent('search_initiated', { query, filters, hasLocation: !!userLocation });
 
             // Show loading state
             loadingState.style.display = 'block';
@@ -525,12 +677,17 @@
             errorMessage.style.display = 'none';
 
             try {
+                const requestBody = { query, filters };
+                if (userLocation) {
+                    requestBody.user_location = userLocation;
+                }
+
                 const response = await fetch(`${API_BASE}/api/search`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ query, filters })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
@@ -615,7 +772,7 @@
 
         function displayTrails(trails, usedAI = false) {
             const resultsContainer = document.querySelector('.trail-results');
-            const headerText = 'Top 5 Recommended Trails';  // Always show same title
+            const headerText = 'Top 5 Recommended Trails';
             resultsContainer.innerHTML = `<div class="results-header">${headerText}</div>`;
 
             if (!trails || trails.length === 0) {
@@ -624,12 +781,16 @@
             }
 
             trails.forEach((trail, index) => {
-                const nearbyLocations = getNearbyLocations(trail.coordinates, trail.distance_to_city || 20);
                 const canvasId = `elevation-${trail.id}`;
                 
                 const trailCard = document.createElement('div');
                 trailCard.className = 'trail-card';
                 trailCard.dataset.trailId = trail.id;
+
+                let distanceBadge = '';
+                if (trail.distance_from_user !== undefined) {
+                    distanceBadge = `<span class="distance-badge">${trail.distance_from_user.toFixed(1)}km away</span>`;
+                }
 
                 trailCard.innerHTML = `
                     <div class="trail-header">
@@ -641,6 +802,7 @@
                             <div class="trail-info">
                                 <span>${trail.length} km</span>
                                 <span class="difficulty-badge difficulty-${trail.difficulty}">${trail.difficulty}</span>
+                                ${distanceBadge}
                             </div>
                             <div class="trail-info">
                                 <span></span>
@@ -659,8 +821,8 @@
                                 Length: ${trail.length} km<br>
                                 Average Slope: ${trail.avg_slope}%<br>
                                 Maximum Slope: ${trail.max_slope}%<br>
-                                Distance to City: ${trail.distance_to_city} km<br>
                                 Vehicle Access: ${trail.vehicles === 'biking' ? 'Bikes allowed' : 'Hiking only'}
+                                ${trail.distance_from_user ? `<br>Distance from you: ${trail.distance_from_user.toFixed(1)} km` : ''}
                             </div>
                         </div>
                         
@@ -740,6 +902,7 @@
                                 ${trail.ai_summary || trail.description}
                             </div>
                             ${trail.max_slope ? `<div style="margin-top: 5px; font-size: 12px; color: #888;">Max slope: ${trail.max_slope}%</div>` : ''}
+                            ${trail.distance_from_user ? `<div style="margin-top: 5px; font-size: 12px; color: #888;">Distance: ${trail.distance_from_user.toFixed(1)}km</div>` : ''}
                         </div>
                     `)
                     .addTo(map);
@@ -753,9 +916,13 @@
                 });
             });
 
-            // Fit map to show all markers
+            // Fit map to show all markers (including user location if available)
             if (trailMarkers.length > 0) {
-                const group = new L.featureGroup(trailMarkers);
+                const allMarkers = [...trailMarkers];
+                if (userLocationMarker) {
+                    allMarkers.push(userLocationMarker);
+                }
+                const group = new L.featureGroup(allMarkers);
                 map.fitBounds(group.getBounds().pad(0.1));
             }
         }
