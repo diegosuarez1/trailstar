@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrailFinder - Discover Your Perfect Trail</title>
-    
+    <title>HikeSense - Discover Your Perfect Trail</title>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
-    
+
     <style>
         * {
             margin: 0;
@@ -98,7 +99,8 @@
             font-size: 14px;
         }
 
-        .filter-select, .filter-range {
+        .filter-select,
+        .filter-range {
             width: 100%;
             padding: 10px;
             border: 1px solid #e2e8f0;
@@ -175,7 +177,7 @@
             border-radius: 12px;
             padding: 15px;
             margin-bottom: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             transition: all 0.3s ease;
             cursor: pointer;
             border-left: 4px solid transparent;
@@ -183,7 +185,7 @@
 
         .trail-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             border-left-color: #667eea;
         }
 
@@ -243,9 +245,20 @@
             text-transform: uppercase;
         }
 
-        .difficulty-easy { background: #c6f6d5; color: #22543d; }
-        .difficulty-moderate { background: #feebc8; color: #c05621; }
-        .difficulty-hard { background: #fed7d7; color: #c53030; }
+        .difficulty-easy {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .difficulty-moderate {
+            background: #feebc8;
+            color: #c05621;
+        }
+
+        .difficulty-hard {
+            background: #fed7d7;
+            color: #c53030;
+        }
 
         .distance-badge {
             display: inline-block;
@@ -367,8 +380,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .error-message {
@@ -393,30 +411,28 @@
             .container {
                 flex-direction: column;
             }
-            
+
             .search-panel {
                 width: 100%;
                 height: 40vh;
             }
-            
+
             .map-container {
                 height: 60vh;
             }
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="search-panel">
-            <div class="logo">TrailFinder</div>
-            
+            <div class="logo">HikeSense</div>
+
             <div class="search-box">
                 <label class="filter-label">Description:</label>
-                <input type="text" 
-                       class="search-input" 
-                       id="searchInput"
-                       placeholder="(moderate hike with water views)"
-                       value="">
+                <input type="text" class="search-input" id="searchInput" placeholder="(moderate hike with water views)"
+                    value="">
                 <button class="search-btn" id="searchBtn">Find</button>
             </div>
 
@@ -433,9 +449,11 @@
                     <div class="range-display" id="distanceDisplay">Within 50 km</div>
                     <div class="location-controls">
                         <button class="location-btn" id="getLocationBtn">Get My Location</button>
-                        <button class="location-btn" id="clearLocationBtn" style="background: #f56565;" disabled>Clear</button>
+                        <button class="location-btn" id="clearLocationBtn" style="background: #f56565;"
+                            disabled>Clear</button>
                     </div>
-                    <div class="location-status" id="locationStatus">Click "Get My Location" to enable distance filtering</div>
+                    <div class="location-status" id="locationStatus">Click "Get My Location" to enable distance
+                        filtering</div>
                 </div>
             </div>
 
@@ -457,7 +475,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-    
+
     <script>
         // Initialize map centered on Virginia
         const map = L.map('map').setView([37.2431, -80.4139], 8);
@@ -486,7 +504,7 @@
         const locationStatus = document.getElementById('locationStatus');
 
         // Configure API base URL - adjust this based on your setup
-        const API_BASE = window.location.origin.includes('localhost') ? 'http://localhost:5000' : '';
+        const API_BASE = 'http://localhost:5000';  // Force port 5000
 
         function logEvent(event, data) {
             console.log(JSON.stringify({
@@ -505,12 +523,12 @@
             }, 5000);
         }
 
-        lengthFilter.addEventListener('input', function() {
+        lengthFilter.addEventListener('input', function () {
             lengthDisplay.textContent = `Up to ${this.value} km`;
             logEvent('filter_changed', { filter: 'length', value: this.value });
         });
 
-        distanceFilter.addEventListener('input', function() {
+        distanceFilter.addEventListener('input', function () {
             distanceDisplay.textContent = `Within ${this.value} km`;
             logEvent('filter_changed', { filter: 'distance', value: this.value });
         });
@@ -533,7 +551,7 @@
             distanceFilter.style.opacity = '0.5';
         }
 
-        getLocationBtn.addEventListener('click', function() {
+        getLocationBtn.addEventListener('click', function () {
             if (!navigator.geolocation) {
                 updateLocationStatus('Geolocation not supported by browser', 'error');
                 return;
@@ -543,7 +561,7 @@
             updateLocationStatus('Getting your location...', 'pending');
 
             navigator.geolocation.getCurrentPosition(
-                function(position) {
+                function (position) {
                     userLocation = {
                         lat: position.coords.latitude,
                         lon: position.coords.longitude
@@ -553,7 +571,7 @@
                     if (userLocationMarker) {
                         map.removeLayer(userLocationMarker);
                     }
-                    
+
                     userLocationMarker = L.marker([userLocation.lat, userLocation.lon], {
                         icon: L.divIcon({
                             className: 'user-location-marker',
@@ -566,12 +584,12 @@
                     enableLocationFilter();
                     updateLocationStatus(`Location found! (${userLocation.lat.toFixed(3)}, ${userLocation.lon.toFixed(3)})`, 'success');
                     getLocationBtn.disabled = false;
-                    
+
                     logEvent('location_acquired', { lat: userLocation.lat, lon: userLocation.lon });
                 },
-                function(error) {
+                function (error) {
                     let message = 'Failed to get location';
-                    switch(error.code) {
+                    switch (error.code) {
                         case error.PERMISSION_DENIED:
                             message = 'Location access denied by user';
                             break;
@@ -594,7 +612,7 @@
             );
         });
 
-        clearLocationBtn.addEventListener('click', function() {
+        clearLocationBtn.addEventListener('click', function () {
             userLocation = null;
             if (userLocationMarker) {
                 map.removeLayer(userLocationMarker);
@@ -608,19 +626,19 @@
         function createElevationChart(canvasId, elevationProfile) {
             const canvas = document.getElementById(canvasId);
             if (!canvas || !elevationProfile || elevationProfile.length < 2) return;
-            
+
             const ctx = canvas.getContext('2d');
             const width = canvas.width;
             const height = canvas.height;
-            
+
             // Clear canvas
             ctx.clearRect(0, 0, width, height);
-            
+
             // Find min and max elevation
             const minElevation = Math.min(...elevationProfile);
             const maxElevation = Math.max(...elevationProfile);
             const elevationRange = maxElevation - minElevation || 1;
-            
+
             // Draw grid lines
             ctx.strokeStyle = '#e2e8f0';
             ctx.lineWidth = 1;
@@ -631,24 +649,24 @@
                 ctx.lineTo(width, y);
                 ctx.stroke();
             }
-            
+
             // Draw elevation line
             ctx.strokeStyle = '#667eea';
             ctx.lineWidth = 2;
             ctx.fillStyle = 'rgba(102, 126, 234, 0.1)';
-            
+
             ctx.beginPath();
             elevationProfile.forEach((elevation, index) => {
                 const x = (width * index) / (elevationProfile.length - 1);
                 const y = height - ((elevation - minElevation) / elevationRange) * height;
-                
+
                 if (index === 0) {
                     ctx.moveTo(x, y);
                 } else {
                     ctx.lineTo(x, y);
                 }
             });
-            
+
             // Fill area under curve
             const lastX = width;
             const lastY = height - ((elevationProfile[elevationProfile.length - 1] - minElevation) / elevationRange) * height;
@@ -695,15 +713,15 @@
                 }
 
                 const data = await response.json();
-                
+
                 if (data.error) {
                     throw new Error(data.error);
                 }
-                
+
                 displayTrails(data.trails, data.used_ai);
                 showTrailsOnMap(data.trails);
-                
-                logEvent('search_completed', { 
+
+                logEvent('search_completed', {
                     resultsCount: data.trails.length,
                     trails: data.trails.map(t => t.id),
                     usedAI: data.used_ai
@@ -713,7 +731,7 @@
                 console.error('Search failed:', error);
                 logEvent('search_error', { error: error.message });
                 showError(`Search failed: ${error.message}`);
-                
+
             } finally {
                 loadingState.style.display = 'none';
                 trailResults.style.display = 'block';
@@ -734,7 +752,7 @@
         }
 
         searchBtn.addEventListener('click', performSearch);
-        searchInput.addEventListener('keypress', function(e) {
+        searchInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 performSearch();
             }
@@ -743,29 +761,29 @@
         function toggleTrailDetails(trailCard, trail) {
             const details = trailCard.querySelector('.trail-details');
             const arrow = trailCard.querySelector('.dropdown-arrow');
-            
+
             const isExpanded = details.classList.contains('expanded');
-            
+
             // Close all other expanded details
             document.querySelectorAll('.trail-details.expanded').forEach(detail => {
                 detail.classList.remove('expanded');
                 detail.parentElement.classList.remove('expanded');
                 detail.parentElement.querySelector('.dropdown-arrow').classList.remove('expanded');
             });
-            
+
             if (!isExpanded) {
                 details.classList.add('expanded');
                 trailCard.classList.add('expanded');
                 arrow.classList.add('expanded');
-                
+
                 // Create elevation chart after DOM update
                 setTimeout(() => {
                     createElevationChart(`elevation-${trail.id}`, trail.elevation_profile);
                 }, 100);
-                
+
                 logEvent('trail_details_expanded', { trailId: trail.id });
             }
-            
+
             // Prevent the card click from triggering map selection
             event.stopPropagation();
         }
@@ -782,7 +800,7 @@
 
             trails.forEach((trail, index) => {
                 const canvasId = `elevation-${trail.id}`;
-                
+
                 const trailCard = document.createElement('div');
                 trailCard.className = 'trail-card';
                 trailCard.dataset.trailId = trail.id;
@@ -796,17 +814,17 @@
                     <div class="trail-header">
                         <div class="trail-main-info">
                             <div class="trail-name">
-                                ${trail.name}
+                                ${trail.trail_name}
                                 <span class="dropdown-arrow">&#9660;</span>
                             </div>
                             <div class="trail-info">
-                                <span>${trail.length} km</span>
+                                <span>${trail.trail_length} km</span>
                                 <span class="difficulty-badge difficulty-${trail.difficulty}">${trail.difficulty}</span>
                                 ${distanceBadge}
                             </div>
                             <div class="trail-info">
                                 <span></span>
-                                ${trail.max_slope > 0 ? `<span>Max slope: ${trail.max_slope}%</span>` : '<span>Flat trail</span>'}
+                                ${trail.max_slope > 0 ? `<span>Max Grade: ${trail.max_slope}%</span>` : '<span>Flat trail</span>'}
                             </div>
                         </div>
                     </div>
@@ -815,12 +833,12 @@
                         <div class="details-section">
                             <div class="details-title">Trail Summary</div>
                             <div class="details-content">
-                                ${trail.ai_summary || trail.description}
+                                ${trail.description}
                                 <br><br>
                                 <strong>Technical Details:</strong><br>
-                                Length: ${trail.length} km<br>
-                                Average Slope: ${trail.avg_slope}%<br>
-                                Maximum Slope: ${trail.max_slope}%<br>
+                                Length: ${trail.trail_length} km<br>
+                                Average Slope: ${trail.average_slope}%<br>
+                                Maximum Slope: ${trail.slope}%<br>
                                 Vehicle Access: ${trail.vehicles === 'biking' ? 'Bikes allowed' : 'Hiking only'}
                                 ${trail.distance_from_user ? `<br>Distance from you: ${trail.distance_from_user.toFixed(1)} km` : ''}
                             </div>
@@ -836,30 +854,30 @@
                         <div class="details-section">
                             <div class="details-title">Nearby Cities</div>
                             <ul class="location-list">
-                                ${trail.raw_trail_data && trail.raw_trail_data.closest_cities ? 
-                                    trail.raw_trail_data.closest_cities.slice(0, 3).map(city => 
-                                        `<li class="location-item">
+                                ${trail.closest_cities ?
+                        trail.closest_cities.slice(0, 3).map(city =>
+                            `<li class="location-item">
                                             ${city[0]}
                                             <span class="location-distance">${city[1]} km</span>
                                         </li>`
-                                    ).join('') :
-                                    `<li class="location-item">Data not available</li>`
-                                }
+                        ).join('') :
+                        `<li class="location-item">Data not available</li>`
+                    }
                             </ul>
                         </div>
                         
                         <div class="details-section">
                             <div class="details-title">Nearby Natural Features</div>
                             <ul class="location-list">
-                                ${trail.raw_trail_data && trail.raw_trail_data.closest_natural ? 
-                                    trail.raw_trail_data.closest_natural.slice(0, 3).map(feature => 
-                                        `<li class="location-item">
+                                ${trail.closest_natural ?
+                        trail.closest_natural.slice(0, 3).map(feature =>
+                            `<li class="location-item">
                                             ${feature[0]}
                                             <span class="location-distance">${feature[1]} km</span>
                                         </li>`
-                                    ).join('') :
-                                    `<li class="location-item">Data not available</li>`
-                                }
+                        ).join('') :
+                        `<li class="location-item">Data not available</li>`
+                    }
                             </ul>
                         </div>
                     </div>
@@ -868,7 +886,7 @@
                 // Add event listeners
                 const headerArea = trailCard.querySelector('.trail-header');
                 const dropdownArrow = trailCard.querySelector('.dropdown-arrow');
-                
+
                 headerArea.addEventListener('click', (e) => {
                     if (e.target === dropdownArrow || e.target.closest('.dropdown-arrow')) {
                         toggleTrailDetails(trailCard, trail);
@@ -876,7 +894,7 @@
                         selectTrail(trail, trailCard);
                     }
                 });
-                
+
                 dropdownArrow.addEventListener('click', (e) => {
                     e.stopPropagation();
                     toggleTrailDetails(trailCard, trail);
@@ -910,7 +928,7 @@
                 marker.trailId = trail.id;
                 trailMarkers.push(marker);
 
-                marker.on('click', function() {
+                marker.on('click', function () {
                     const trailCard = document.querySelector(`[data-trail-id="${trail.id}"]`);
                     selectTrail(trail, trailCard);
                 });
@@ -954,10 +972,11 @@
         }
 
         // Initialize the app when page loads
-        window.addEventListener('load', function() {
+        window.addEventListener('load', function () {
             logEvent('app_loaded', { userAgent: navigator.userAgent });
             loadInitialTrails();
         });
     </script>
 </body>
+
 </html>
